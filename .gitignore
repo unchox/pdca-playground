@@ -8,3 +8,6 @@ __pycache__/
 .pdca/judge_result.json
 .pdca/maker_last.json
 .pdca/last_feedback.json
+
+# editable install 産物 (pip install -e)
+*.egg-info/

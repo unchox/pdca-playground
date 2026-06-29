@@ -1,8 +1,0 @@
-pyproject.toml
-pdca_loop.egg-info/PKG-INFO
-pdca_loop.egg-info/SOURCES.txt
-pdca_loop.egg-info/dependency_links.txt
-pdca_loop.egg-info/requires.txt
-pdca_loop.egg-info/top_level.txt
-tests/test_act.py
-tests/test_guard.py

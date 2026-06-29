@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "task_id": "T1",
+  "status": "running",
+  "cycle": 0,
+  "max_cycles": 5,
+  "oscillation_threshold": 3,
+  "oscillation_window": 5,
+  "no_progress_threshold": 2,
+  "min_quality_delta": 0.01,
+  "history": []
+}

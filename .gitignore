@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.pdca/ci_result.json
+.pdca/pytest.json
+.pdca/failing_tests.txt
+.pdca/judge_result.json
+.pdca/maker_last.json
+.pdca/last_feedback.json

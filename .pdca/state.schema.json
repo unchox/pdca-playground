@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PDCA loop state",
+  "type": "object",
+  "required": ["version", "task_id", "status", "cycle", "max_cycles", "oscillation_threshold", "oscillation_window", "no_progress_threshold", "min_quality_delta", "history"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "const": 2 },
+    "task_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["running", "completed", "replan", "stopped_max", "stopped_oscillation", "stopped_no_progress"]
+    },
+    "cycle": { "type": "integer", "minimum": 0 },
+    "max_cycles": { "type": "integer", "minimum": 1 },
+    "oscillation_threshold": { "type": "integer", "minimum": 2 },
+    "oscillation_window": { "type": "integer", "minimum": 2 },
+    "no_progress_threshold": { "type": "integer", "minimum": 1 },
+    "min_quality_delta": { "type": "number", "minimum": 0 },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cycle", "outcome", "failure_signature", "summary", "quality_vector", "replan_requested", "ts"],
+        "additionalProperties": false,
+        "properties": {
+          "cycle": { "type": "integer", "minimum": 1 },
+          "outcome": { "type": "string", "enum": ["pass", "fail"] },
+          "failure_signature": { "type": ["string", "null"] },
+          "summary": { "type": "string" },
+          "quality_vector": {
+            "type": ["object", "null"],
+            "additionalProperties": { "type": "number" }
+          },
+          "replan_requested": { "type": "boolean" },
+          "ts": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+name: pdca-act
+
+# Fires after the Check (ci) workflow finishes, on the loop's own branches.
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+
+# STRUCTURAL GUARD 1 — one Act job per branch at a time. Queue, don't cancel,
+# so cycles serialize and never stack into parallel loops.
+concurrency:
+  group: pdca-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write        # commit state + maker patch
+  issues: write          # open escalation / replan issues
+  pull-requests: write   # comment completion on the PR
+
+jobs:
+  act:
+    runs-on: ubuntu-latest
+    # STRUCTURAL GUARD 2 — hard wall-clock ceiling per cycle (covers the maker run).
+    timeout-minutes: 30
+    if: startsWith(github.event.workflow_run.head_branch, 'pdca/')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4   # for the npm fallback installer
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code (maker)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash || npm install -g @anthropic-ai/claude-code
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Pull CI result artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ci_result
+          path: .pdca
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # LOGICAL GUARD — record outcome (+ optional judge inputs), run
+      # guard.evaluate(), persist decision. On CONTINUE the maker EDITS files
+      # here (no git ops). Model creds live in this step; PDCA_PAT does NOT, so
+      # this step cannot re-fire CI.
+      - name: Act (decision + maker edits)
+        id: act
+        env:
+          PDCA_STATE: .pdca/state.json
+          PDCA_CI_RESULT: .pdca/ci_result.json
+          PDCA_JUDGE_RESULT: .pdca/judge_result.json
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: python .pdca/act.py
+
+      # ---- CONTINUE: one commit (state + maker patch), pushed with PDCA_PAT ----
+      # Reachable ONLY when the guard said continue. This is the ONLY place
+      # PDCA_PAT is referenced, so no cycle can begin without passing the guard.
+      # The head commit carries the maker patch (no [skip ci]) -> CI re-fires.
+      - name: Commit patch + re-trigger next cycle
+        if: steps.act.outputs.decision == 'continue'
+        env:
+          PDCA_PAT: ${{ secrets.PDCA_PAT }}
+        run: |
+          git config user.name  "pdca-bot"
+          git config user.email "pdca-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "pdca: cycle ${{ github.run_number }} maker patch"
+          git push "https://x-access-token:${PDCA_PAT}@github.com/${{ github.repository }}.git" \
+            "HEAD:${{ github.event.workflow_run.head_branch }}"
+
+      # ---- TERMINAL: persist state only, default token (never re-fires CI) ----
+      - name: Persist final state
+        if: steps.act.outputs.decision != 'continue'
+        run: |
+          git config user.name  "pdca-bot"
+          git config user.email "pdca-bot@users.noreply.github.com"
+          git add .pdca/state.json
+          git commit -m "pdca: final state [skip ci]" || echo "no state change"
+          git push origin HEAD:${{ github.event.workflow_run.head_branch }}
+
+      # ---- COMPLETED ----
+      - name: Comment completion on PR
+        if: steps.act.outputs.decision == 'completed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment --head "${{ github.event.workflow_run.head_branch }}" \
+            --body "PDCA loop completed — all gates green. ${{ steps.act.outputs.reason }}" || true
+
+      # ---- REPLAN (terminal; NO PDCA_PAT; human plan gate) ----
+      - name: Open replan issue
+        if: steps.act.outputs.decision == 'replan'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REASON: ${{ steps.act.outputs.reason }}
+        run: |
+          {
+            printf 'The loop requested a **replan**: %s\n\n' "$REASON"
+            printf 'The current Plan contract/oracles appear wrong or unsafe to patch around. '
+            printf 'A revised Plan must be human-approved before a new loop starts. '
+            printf 'See `.pdca/state.json` on branch `%s` for the cycle history.\n' "$BRANCH"
+          } > replan_body.md
+          gh issue create --title "PDCA replan requested on ${BRANCH}" \
+            --label "pdca-replan" --body-file replan_body.md
+
+      # ---- ESCALATION (budget / oscillation / no-progress) ----
+      - name: Open escalation issue
+        if: steps.act.outputs.decision == 'stopped_max' || steps.act.outputs.decision == 'stopped_oscillation' || steps.act.outputs.decision == 'stopped_no_progress'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DECISION: ${{ steps.act.outputs.decision }}
+          REASON: ${{ steps.act.outputs.reason }}
+        run: |
+          {
+            printf 'Decision: **%s**\n\n' "$DECISION"
+            printf 'Reason: %s\n\n' "$REASON"
+            printf 'The autonomous loop stopped and needs a human. '
+            printf 'See `.pdca/state.json` on branch `%s` for the full cycle history.\n' "$BRANCH"
+          } > issue_body.md
+          gh issue create --title "PDCA loop halted on ${BRANCH}" \
+            --label "pdca-escalation" --body-file issue_body.md

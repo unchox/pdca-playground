@@ -1,0 +1,20 @@
+[project]
+name = "pdca-loop"
+version = "0.1.0"
+description = "Autonomous PDCA loop scaffold (GitHub control plane + self-owned stop-judgment)"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+  "pytest-json-report==1.5.0",
+  "ruff==0.9.6",
+  "jsonschema==4.23.0",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

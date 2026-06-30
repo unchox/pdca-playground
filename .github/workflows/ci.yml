@@ -41,7 +41,15 @@ jobs:
             --json-report --json-report-file=.pdca/pytest.json > pytest.txt 2>&1
           [ $? -ne 0 ] && FAILING+=("tests")
 
-          GROUPS=$(IFS=,; echo "${FAILING[*]}")
+          # 空 array を $(IFS=,; echo "${FAILING[*]}") で expand すると bash bug で
+          # garbage 出力 (Mac bash 3.2 = "20" / Ubuntu bash 5.x = "1001") → 空 array 時の
+          # branch 分岐で確実に GROUPS="" にする (2026-06-30 fizzbuzz-init Phase 3 で踏破)
+          if [ "${#FAILING[@]}" -eq 0 ]; then
+            GROUPS=""
+          else
+            GROUPS=$(IFS=,; echo "${FAILING[*]}")
+          fi
+          echo "DEBUG: FAILING=(${FAILING[*]}) count=${#FAILING[@]} GROUPS=[$GROUPS]"
           python .pdca/ci_report.py "$GROUPS"
 
       - name: Upload ci_result

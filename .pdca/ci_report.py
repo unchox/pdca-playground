@@ -41,9 +41,18 @@ def build(failing_groups: list[str]) -> dict:
     }
 
 
+KNOWN_GROUPS = {"lint:ruff", "tests"}
+
+
 def main(argv: list[str]) -> int:
     raw = argv[1] if len(argv) > 1 else ""
-    groups = [g for g in raw.split(",") if g]
+    # defense-in-depth: bash IFS empty array bug で garbage が来ても known group のみ受理
+    # (2026-06-30 fizzbuzz-init Phase 3 で踏破した "1001" / "20" garbage 対策)
+    candidates = [g for g in raw.split(",") if g]
+    unknown = [g for g in candidates if g not in KNOWN_GROUPS]
+    if unknown:
+        print(f"ci_report: WARN unknown group ids {unknown!r} dropped (bash IFS bug?)", file=sys.stderr)
+    groups = [g for g in candidates if g in KNOWN_GROUPS]
     result = build(groups)
     Path(".pdca").mkdir(exist_ok=True)
     Path(".pdca/ci_result.json").write_text(

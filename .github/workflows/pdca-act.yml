@@ -72,6 +72,7 @@ jobs:
         if: steps.act.outputs.decision == 'continue'
         env:
           PDCA_PAT: ${{ secrets.PDCA_PAT }}
+          GH_TOKEN: ${{ secrets.PDCA_PAT }}
         run: |
           git config user.name  "pdca-bot"
           git config user.email "pdca-bot@users.noreply.github.com"
@@ -79,6 +80,14 @@ jobs:
           git commit -m "pdca: cycle ${{ github.run_number }} maker patch"
           git push "https://x-access-token:${PDCA_PAT}@github.com/${{ github.repository }}.git" \
             "HEAD:${{ github.event.workflow_run.head_branch }}"
+
+          # Explicit workflow_dispatch trigger: workflow_run-triggered contexts
+          # の中で PAT push しても GitHub anti-recursion guard で push event 抑制
+          # される (2026-06-30 fizzbuzz-init Phase 3 で踏破) → gh CLI で 明示 dispatch。
+          gh workflow run ci.yml \
+            --ref "${{ github.event.workflow_run.head_branch }}" \
+            --repo "${{ github.repository }}" || \
+            echo "::warning::workflow_dispatch trigger failed・別 trigger 待ち"
 
       # ---- TERMINAL: persist state only, default token (never re-fires CI) ----
       - name: Persist final state

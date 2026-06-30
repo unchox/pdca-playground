@@ -1,8 +1,8 @@
 {
   "version": 2,
   "task_id": "T1",
-  "status": "running",
-  "cycle": 1,
+  "status": "completed",
+  "cycle": 2,
   "max_cycles": 5,
   "oscillation_threshold": 3,
   "oscillation_window": 5,
@@ -17,6 +17,15 @@
       "quality_vector": null,
       "replan_requested": false,
       "ts": "2026-06-30T04:16:27.097321+00:00"
+    },
+    {
+      "cycle": 2,
+      "outcome": "pass",
+      "failure_signature": null,
+      "summary": "all gates green",
+      "quality_vector": null,
+      "replan_requested": false,
+      "ts": "2026-06-30T04:17:27.338324+00:00"
     }
   ]
 }

@@ -11,3 +11,6 @@ __pycache__/
 
 # editable install 産物 (pip install -e)
 *.egg-info/
+
+# secrets (Mac local 専用・3 層管理ルール・GitHub に絶対 commit しない)
+secrets/*.env

@@ -34,23 +34,20 @@ jobs:
           mkdir -p .pdca
           FAILING=()
 
+          # exit code を file に直接書く (bash array 経由 廃止・IFS bug 完全回避)
+          # 2026-06-30 fizzbuzz/multiply で踏破: bash IFS subshell が 非空 array でも
+          # "1001" garbage を生成・group 名引き渡し pattern を 廃止 → ci_report.py が
+          # exit code file + pytest.json を直読みする
+
           ruff check . --output-format=concise > ruff.txt 2>&1
-          [ $? -ne 0 ] && FAILING+=("lint:ruff")
+          echo $? > .pdca/ruff_exit.txt
 
           pytest -q --no-header -p no:cacheprovider \
             --json-report --json-report-file=.pdca/pytest.json > pytest.txt 2>&1
-          [ $? -ne 0 ] && FAILING+=("tests")
+          echo $? > .pdca/pytest_exit.txt
 
-          # 空 array を $(IFS=,; echo "${FAILING[*]}") で expand すると bash bug で
-          # garbage 出力 (Mac bash 3.2 = "20" / Ubuntu bash 5.x = "1001") → 空 array 時の
-          # branch 分岐で確実に GROUPS="" にする (2026-06-30 fizzbuzz-init Phase 3 で踏破)
-          if [ "${#FAILING[@]}" -eq 0 ]; then
-            GROUPS=""
-          else
-            GROUPS=$(IFS=,; echo "${FAILING[*]}")
-          fi
-          echo "DEBUG: FAILING=(${FAILING[*]}) count=${#FAILING[@]} GROUPS=[$GROUPS]"
-          python .pdca/ci_report.py "$GROUPS"
+          echo "DEBUG: ruff_exit=$(cat .pdca/ruff_exit.txt) pytest_exit=$(cat .pdca/pytest_exit.txt)"
+          python .pdca/ci_report.py
 
       - name: Upload ci_result
         if: always()

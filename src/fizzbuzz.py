@@ -17,4 +17,12 @@ def fizzbuzz(n):
 
     See .pdca/plan.yaml T1 for full contract.
     """
-    raise NotImplementedError("maker must implement fizzbuzz()")
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > 100:
+        raise ValueError(f"n must be an integer in [1, 100], got {n!r}")
+    if n % 15 == 0:
+        return "FizzBuzz"
+    if n % 3 == 0:
+        return "Fizz"
+    if n % 5 == 0:
+        return "Buzz"
+    return str(n)

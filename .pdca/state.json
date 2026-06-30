@@ -2,21 +2,11 @@
   "version": 2,
   "task_id": "T1",
   "status": "running",
-  "cycle": 1,
+  "cycle": 0,
   "max_cycles": 5,
   "oscillation_threshold": 3,
   "oscillation_window": 5,
   "no_progress_threshold": 2,
   "min_quality_delta": 0.01,
-  "history": [
-    {
-      "cycle": 1,
-      "outcome": "fail",
-      "failure_signature": "233b1bbe7331e6bf",
-      "summary": "1 gate group(s) red",
-      "quality_vector": null,
-      "replan_requested": false,
-      "ts": "2026-06-30T02:38:44.034180+00:00"
-    }
-  ]
+  "history": []
 }

@@ -10,4 +10,6 @@ def multiply(a, b):
 
     See .pdca/plan.yaml (multiply-v3 contract) for spec.
     """
-    raise NotImplementedError("maker must implement multiply()")
+    if not isinstance(a, int) or not isinstance(b, int) or isinstance(a, bool) or isinstance(b, bool):
+        raise TypeError(f"multiply requires int arguments, got {type(a)} and {type(b)}")
+    return a * b

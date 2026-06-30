@@ -1,0 +1,104 @@
+plan:
+  goal: |
+    src/fizzbuzz.py に古典 FizzBuzz (1〜100 の整数 n に対し
+    3 の倍数で "Fizz" / 5 の倍数で "Buzz" / 15 の倍数で "FizzBuzz" /
+    それ以外で str(n) を返す関数 fizzbuzz(n) を実装。 pytest の全 test が green
+    になるまで PDCA loop で自律実装する。
+  goal_restated: |
+    fizzbuzz(n: int) -> str を src/fizzbuzz.py に実装する。
+    n は 1 以上 100 以下の整数。 ルール:
+    - n が 15 の倍数 (= 3 と 5 の最小公倍数) → "FizzBuzz"
+    - n が 3 の倍数 (15 の倍数除く) → "Fizz"
+    - n が 5 の倍数 (15 の倍数除く) → "Buzz"
+    - それ以外 → str(n)
+    境界外 (n < 1 or n > 100 or 整数以外) は ValueError を raise。
+    test は tests/test_fizzbuzz.py に happy path + boundary + error を網羅し
+    1 度 red にしてから maker が実装 → green まで loop。
+
+  readiness:
+    sufficient: true
+    missing: []
+
+  global_guardrails:
+    max_cycles_per_task: 5
+    oscillation_threshold: 3
+    timeout_per_cycle_min: 15
+
+  tasks:
+    - id: T1
+      title: src/fizzbuzz.py に fizzbuzz(n) 実装
+      depends_on: []
+      description: |
+        src/fizzbuzz.py 新規作成。 fizzbuzz(n: int) -> str function を実装。
+        既存 tests/test_fizzbuzz.py (seed で先に red) を全 pass させる。
+        maker は src/fizzbuzz.py のみ作成・test は触らない。
+      verifiability: A
+      acceptance_criteria:
+        - id: AC1
+          statement: |
+            tests/test_fizzbuzz.py の全 case が pytest で green になる
+            (happy path + boundary 1/100 + error <1 / >100 / float / str 各々)
+          oracle:
+            type: pytest
+            spec: tests/test_fizzbuzz.py
+            pass_condition: exit 0 / all tests passed
+        - id: AC2
+          statement: |
+            src/fizzbuzz.py が ruff lint で 0 error
+          oracle:
+            type: lint
+            spec: ruff check src/fizzbuzz.py
+            pass_condition: All checks passed
+      test_spec:
+        - |
+          signature: fizzbuzz(n: int) -> str
+        - |
+          happy path:
+          - fizzbuzz(1)  == "1"
+          - fizzbuzz(2)  == "2"
+          - fizzbuzz(3)  == "Fizz"
+          - fizzbuzz(5)  == "Buzz"
+          - fizzbuzz(6)  == "Fizz"
+          - fizzbuzz(9)  == "Fizz"
+          - fizzbuzz(10) == "Buzz"
+          - fizzbuzz(15) == "FizzBuzz"
+          - fizzbuzz(30) == "FizzBuzz"
+          - fizzbuzz(45) == "FizzBuzz"
+          - fizzbuzz(99) == "Fizz"
+        - |
+          boundary:
+          - fizzbuzz(1)   == "1"        # lower bound
+          - fizzbuzz(100) == "Buzz"     # upper bound (100 = 5 * 20)
+        - |
+          error:
+          - fizzbuzz(0)    raises ValueError
+          - fizzbuzz(-1)   raises ValueError
+          - fizzbuzz(101)  raises ValueError
+          - fizzbuzz(3.0)  raises ValueError  # float (bool は int subclass で受理は許容しない: TypeError or ValueError どちらか)
+          - fizzbuzz("3")  raises ValueError
+          - fizzbuzz(None) raises ValueError
+      human_gate:
+        required: false
+        reason: ""
+
+    - id: T2
+      title: Loop 完走後 PR comment 確認 + uchino merge
+      depends_on: [T1]
+      description: |
+        T1 完了で `decision=completed` → pdca-act が PR 自動 open + コメント。
+        uchino さん が PR を Web UI で review → 「Approve」 ボタン → branch protection
+        の required review (1) 満たして merge 可能になる。
+      verifiability: C
+      acceptance_criteria:
+        - id: AC1
+          statement: PR が main に merge される
+          oracle:
+            type: human
+            spec: uchino さん が PR review + Approve + Merge
+            pass_condition: PR state = merged
+      test_spec: []
+      human_gate:
+        required: true
+        reason: |
+          main branch への merge は uchino さん の最終承認・PDCA loop の
+          完了 gate (CI 緑 + 1 review) で実装通り human が押す

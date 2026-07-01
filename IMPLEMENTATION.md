@@ -169,6 +169,6 @@ gh api -X PUT repos/{owner}/{repo}/branches/main/protection \
 
 ## チューニング（環境変数 / `.pdca/state.json`）
 
-- maker: `PDCA_MAKER_MODEL`(sonnet) / `PDCA_MAKER_MAX_TURNS`(30) / `PDCA_MAKER_ALLOWED_TOOLS`。
+- maker: `PDCA_MAKER_MODEL`(`claude-sonnet-5` 明示指定・alias 追従禁止) / `PDCA_MAKER_MAX_TURNS`(30) / `PDCA_MAKER_ALLOWED_TOOLS`。
 - guard: `max_cycles`(5) / `oscillation_threshold`(3) / `oscillation_window`(5) /
   `no_progress_threshold`(2) / `min_quality_delta`(0.01)。

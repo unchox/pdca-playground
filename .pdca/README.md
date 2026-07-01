@@ -56,5 +56,6 @@ If the maker makes no change, the run fails loudly (no empty cycle).
 Auth (read from env by the CLI, never in code): set **`ANTHROPIC_API_KEY`** for
 metered API billing, or **`CLAUDE_CODE_OAUTH_TOKEN`** to use a Max/Team seat.
 
-Tunables (env, with defaults): `PDCA_MAKER_MODEL` (sonnet), `PDCA_MAKER_MAX_TURNS`
+Tunables (env, with defaults): `PDCA_MAKER_MODEL` (`claude-sonnet-5` — explicit
+version pin to avoid silent alias drift when Claude Code CLI updates), `PDCA_MAKER_MAX_TURNS`
 (30), `PDCA_MAKER_ALLOWED_TOOLS` (Edit,Write,Read,Grep,Glob).

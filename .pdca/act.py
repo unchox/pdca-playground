@@ -33,7 +33,10 @@ CI_RESULT_PATH = Path(os.environ.get("PDCA_CI_RESULT", ".pdca/ci_result.json"))
 JUDGE_RESULT_PATH = Path(os.environ.get("PDCA_JUDGE_RESULT", ".pdca/judge_result.json"))
 
 # Maker (Claude Code headless) configuration -- all overridable via env.
-MAKER_MODEL = os.environ.get("PDCA_MAKER_MODEL", "sonnet")          # alias: forward-compatible
+# 明示 version 指定: production runtime での silent 変更防止 (2026-07-01 uchino 方針)
+# alias `sonnet` を避け、 Claude Code CLI update 時の自動追従を防ぐ (reproducibility 確保)
+# 移行時: 新 model release → CLAUDE.md 反映 + このデフォルト値更新 (git diff で変更追跡)
+MAKER_MODEL = os.environ.get("PDCA_MAKER_MODEL", "claude-sonnet-5")
 MAKER_MAX_TURNS = int(os.environ.get("PDCA_MAKER_MAX_TURNS", "30"))
 MAKER_ALLOWED_TOOLS = os.environ.get("PDCA_MAKER_ALLOWED_TOOLS", "Edit,Write,Read,Grep,Glob")
 MAKER_CLI = os.environ.get("PDCA_MAKER_CLI", "claude")

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rubric.schema.json",
+  "title": "PDCA rubric contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domain", "version", "criteria"],
+  "properties": {
+    "domain": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "artifact_schema": { "type": "string" },
+    "reference_lists": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "description"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "class", "statement"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "class": { "enum": ["A", "B"] },
+          "statement": { "type": "string", "minLength": 1 },
+          "predicate": { "type": "string" },
+          "check": { "type": "string", "minLength": 1 },
+          "judge_question": { "type": "string", "minLength": 1 },
+          "evidence_required": { "type": "boolean" },
+          "on_fail": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "class": { "const": "A" } } },
+            "then": { "required": ["check"] }
+          },
+          {
+            "if": { "properties": { "class": { "const": "B" } } },
+            "then": { "required": ["judge_question", "evidence_required"] }
+          }
+        ]
+      }
+    }
+  }
+}

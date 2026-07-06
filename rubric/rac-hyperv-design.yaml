@@ -1,0 +1,44 @@
+domain: rac-hyperv-design
+version: 1
+reference_lists:
+  failure_scenarios:
+    - id: fs-node-loss
+      description: single node loss in 2-node cluster
+    - id: fs-net-partition
+      description: interconnect network partition
+    - id: fs-storage-loss
+      description: shared iSCSI storage loss
+criteria:
+  - id: net-01
+    class: A
+    statement: interconnect and public segments are separated
+    predicate: networks[] contains role=interconnect and role=public with distinct vlan/subnet
+    check: "section_present --path networks --require-roles interconnect,public --distinct vlan"
+    on_fail: add explicit interconnect/public segregation to the design
+  - id: sto-02
+    class: A
+    statement: iSCSI paths are multipathed
+    predicate: storage.paths >= 2 and mpio.policy is stated
+    check: "section_present --path storage --require-keys paths,mpio.policy --min paths=2"
+    on_fail: add a second iSCSI path and state the MPIO policy
+  - id: avl-03
+    class: A
+    statement: split-brain countermeasure is documented
+    predicate: sections.quorum exists with voting_disk and failure_behavior
+    check: "section_present --path sections.quorum --require-keys voting_disk,failure_behavior"
+    on_fail: add a quorum section covering voting disk placement and failure behavior
+  - id: ops-04
+    class: A
+    statement: every change step has a rollback
+    predicate: steps[].rollback is non-empty for all steps
+    check: "rollback_coverage --path steps"
+    on_fail: add rollback to the uncovered steps listed in the gap
+  - id: avl-05
+    class: B
+    statement: quorum design is consistent across known failure scenarios
+    judge_question: >
+      For each scenario in reference_lists.failure_scenarios, does
+      sections.quorum explain the cluster behavior? Return
+      {scenario_id, addressed: bool, gap: string} per scenario.
+    evidence_required: true
+    on_fail: extend the quorum section per the gaps cited

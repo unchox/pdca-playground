@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run_meta.schema.json",
+  "title": "Per-cycle run metadata sidecar (.pdca/run_meta.json)",
+  "description": "Spec §6.4 wanted these keys inside state.json; guard.py's LoopState.load() rejects unknown keys and is INV-1-protected, so they live in this sidecar instead (2026-07-06 uchino approved deviation).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model_id", "prompt_version", "judge_prompt_version",
+               "rubric_domain", "rubric_version", "input_hash"],
+  "properties": {
+    "model_id": { "type": "string", "minLength": 1 },
+    "prompt_version": { "type": "string", "minLength": 1 },
+    "judge_prompt_version": { "type": "string", "minLength": 1 },
+    "rubric_domain": { "type": ["string", "null"] },
+    "rubric_version": { "type": ["integer", "null"] },
+    "input_hash": { "type": "string", "minLength": 64, "maxLength": 64 }
+  }
+}

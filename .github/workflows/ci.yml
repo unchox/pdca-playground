@@ -78,6 +78,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" 2>/dev/null || pip install pytest pytest-json-report ruff
 
+      # Verdict cache (Phase 2, L4): judge verdicts are produced in THIS job,
+      # which cannot commit (contents: read) — persist store/verdicts via
+      # actions/cache instead. Decisions are produced in the act job and are
+      # committed to the branch by its existing `git add -A` (§6.5 option a).
+      # run_id in the key forces a save each run; restore-keys pull the latest.
+      - name: Restore verdict cache
+        if: startsWith(github.ref_name, 'pdca/')
+        uses: actions/cache@v4
+        with:
+          path: store/verdicts
+          key: verdicts-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            verdicts-${{ github.ref_name }}-
+            verdicts-
+
       # Rubric gates (Phase 2, L3) — class A checks + class B judge, driven by
       # the committed ready.json. Writes .pdca/rubric_result.json; ci_report.py
       # merges it (single writer of ci_result.json). The LLM credential is

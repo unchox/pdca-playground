@@ -208,3 +208,28 @@ def test_ci_report_corrupt_rubric_result_fails_closed(tmp_path, monkeypatch):
     assert result["outcome"] == "fail"
     assert "__rubric_infra__" in result["failing_checks"]
     assert "infra" in result["error_kinds"]
+
+
+def test_ci_report_missing_rubric_result_with_ready_fails_closed(tmp_path, monkeypatch):
+    """ready.json committed = rubric REQUIRED; a crashed runner must not pass silently."""
+    monkeypatch.chdir(tmp_path)
+    pdca = tmp_path / ".pdca"
+    pdca.mkdir()
+    (pdca / "ruff_exit.txt").write_text("0")
+    (pdca / "pytest_exit.txt").write_text("0")
+    (pdca / "ready.json").write_text("{}")
+    result = ci_report.build()
+    assert result["outcome"] == "fail"
+    assert "__rubric_infra__" in result["failing_checks"]
+
+
+def test_judge_cli_missing_binary_fails_closed(rubric, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    def raise_oserror(prompt):
+        raise FileNotFoundError("claude: command not found")
+
+    monkeypatch.setattr(runner, "_invoke_judge_cli", raise_oserror)
+    result = runner.run_rubric(rubric, _load("design_green.yaml"))
+    assert "avl-05" in result["failing_checks"]
+    assert "judge output invalid" in result["summary"]

@@ -88,3 +88,80 @@ def test_maker_env_drops_api_key_when_oauth_present(monkeypatch):
     act.run_claude_maker("prompt")
     assert "ANTHROPIC_API_KEY" not in captured["env"]
     assert captured["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "oauth-token"
+
+
+def test_one_line_collapses_and_truncates():
+    assert act._one_line("a\nb\t c") == "a b c"
+    assert act._one_line("x" * 400, limit=10) == "x" * 10 + "..."
+
+
+def test_noop_marker_written_when_maker_makes_no_changes(monkeypatch, tmp_path):
+    """A deliberate no-edit by the maker must leave a committed marker, not crash."""
+    monkeypatch.chdir(tmp_path)
+    Path(".pdca").mkdir()
+    Path(".pdca/ready.json").write_text(
+        json.dumps({"task_id": "T", "domain": "d", "goal": "g", "constraints": [],
+                    "artifact_target": "a.yaml", "rubric_domain": "d",
+                    "rubric_version": 1, "enrichment_log": []})
+    )
+    monkeypatch.setattr(act, "READY_PATH", Path(".pdca/ready.json"))
+    monkeypatch.setattr(act, "RUN_META_PATH", Path(".pdca/run_meta.json"))
+    monkeypatch.setattr(act, "NOOP_MARKER_PATH", Path(".pdca/maker_noop.json"))
+    monkeypatch.setattr(act, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(act, "_porcelain_snapshot", lambda: {})
+    monkeypatch.setattr(act, "working_tree_dirty", lambda: True)
+    monkeypatch.setattr(
+        act, "run_claude_maker",
+        lambda prompt: {"session_id": "s", "result": "CP-114 contradicts sto-02; cannot fix"},
+    )
+
+    act.call_maker({"cycle": 1, "still_failing": ["t"], "summary": ""})
+
+    marker = json.loads(Path(".pdca/maker_noop.json").read_text())
+    assert "contradicts" in marker["diagnosis"]
+    assert marker["cycle"] == 1
+    assert not (tmp_path / "store" / "decisions").exists()  # empty delta is never cached
+
+
+def test_consume_maker_noop_reads_and_deletes(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    Path(".pdca").mkdir()
+    monkeypatch.setattr(act, "NOOP_MARKER_PATH", Path(".pdca/maker_noop.json"))
+    Path(".pdca/maker_noop.json").write_text(json.dumps({"cycle": 1, "diagnosis": "why"}))
+    marker = act._consume_maker_noop()
+    assert marker["diagnosis"] == "why"
+    assert not Path(".pdca/maker_noop.json").exists()
+    assert act._consume_maker_noop() is None
+
+
+def test_main_routes_noop_to_replan_with_diagnosis(monkeypatch, tmp_path, capsys):
+    """cycle N maker no-edit -> cycle N+1 act must emit replan (human plan gate)."""
+    monkeypatch.chdir(tmp_path)
+    Path(".pdca").mkdir()
+    Path(".pdca/ci_result.json").write_text(json.dumps({
+        "outcome": "fail",
+        "failing_checks": ["tests/test_x.py::test_policy"],
+        "error_kinds": ["tests"],
+        "summary": "1 gate group(s) red",
+    }))
+    Path(".pdca/maker_noop.json").write_text(json.dumps({
+        "cycle": 1, "diagnosis": "cost policy CP-114 and rubric sto-02\nare mutually exclusive",
+    }))
+    monkeypatch.setattr(act, "STATE_PATH", Path(".pdca/state.json"))
+    monkeypatch.setattr(act, "CI_RESULT_PATH", Path(".pdca/ci_result.json"))
+    monkeypatch.setattr(act, "JUDGE_RESULT_PATH", Path(".pdca/judge_result.json"))
+    monkeypatch.setattr(act, "NOOP_MARKER_PATH", Path(".pdca/maker_noop.json"))
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    monkeypatch.setattr(
+        act, "call_maker",
+        lambda fb: (_ for _ in ()).throw(AssertionError("maker must not run on replan")),
+    )
+
+    assert act.main() == 0
+
+    out = capsys.readouterr().out
+    assert "decision=replan" in out
+    assert "maker diagnosis: cost policy CP-114 and rubric sto-02 are mutually exclusive" in out
+    state = json.loads(Path(".pdca/state.json").read_text())
+    assert state["status"] == "replan"
+    assert state["history"][-1]["replan_requested"] is True

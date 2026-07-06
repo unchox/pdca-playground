@@ -61,11 +61,16 @@ def build() -> dict:
     # Rubric gates (Phase 2): checks/runner.py writes a partial result in the
     # same 4-key shape; merging it here keeps ci_result.json single-writer.
     # A corrupt partial is an infra failure, never a silent skip (fail-closed).
+    rubric_summary = ""
     if RUBRIC_RESULT.exists():
         try:
             rub = json.loads(RUBRIC_RESULT.read_text(encoding="utf-8"))
             failing += [c for c in rub.get("failing_checks", []) if c not in failing]
             failing_groups += [k for k in rub.get("error_kinds", []) if k not in failing_groups]
+            if rub.get("outcome") == "fail" and rub.get("summary"):
+                # Carry the per-criterion gap text through to ci_result so the
+                # maker's feedback says WHY a criterion is red, not just its id.
+                rubric_summary = " | " + str(rub["summary"])[:1500]
         except json.JSONDecodeError:
             failing.append("__rubric_infra__")
             failing_groups.append("infra")
@@ -82,7 +87,9 @@ def build() -> dict:
         "failing_checks": failing,
         "error_kinds": failing_groups,
         "summary": (
-            f"{len(failing_groups)} gate group(s) red" if failing_groups else "all gates green"
+            f"{len(failing_groups)} gate group(s) red{rubric_summary}"
+            if failing_groups
+            else "all gates green"
         ),
     }
 

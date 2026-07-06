@@ -1,0 +1,10 @@
+{
+  "task_id": "T-VLAN-E2E2",
+  "domain": "rac-hyperv-design",
+  "goal": "Two deliverables: (1) implement src/vlan_util.py with parse_vlan(text) -> int accepting 'vlan<N>' (case-insensitive) or a plain number string, raising ValueError for non-numeric text or VLAN ids outside 1..4094, until tests/test_vlan_util.py is green; (2) extend the quorum failure_behavior in design/rac2.yaml so it explicitly covers every scenario in the rubric reference list (node loss, interconnect partition, shared storage loss).",
+  "constraints": [
+    "edit only src/vlan_util.py and design/rac2.yaml",
+    "do not modify tests, rubric files, or workflow files"
+  ],
+  "artifact_target": "design/rac2.yaml"
+}

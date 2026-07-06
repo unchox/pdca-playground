@@ -1,0 +1,22 @@
+# e2e2 seed: every class-A criterion passes, but the quorum failure_behavior
+# only covers node loss — the class-B judge (avl-05) must drive the loop.
+networks:
+  - role: interconnect
+    vlan: 201
+    subnet: 10.0.201.0/24
+  - role: public
+    vlan: 200
+    subnet: 10.0.200.0/24
+storage:
+  paths: 2
+  mpio:
+    policy: round-robin
+sections:
+  quorum:
+    voting_disk: dedicated iSCSI quorum LUN
+    failure_behavior: if a node is lost, the surviving node keeps the database open
+steps:
+  - action: create the 2-node cluster
+    rollback: destroy the cluster and remove cluster metadata
+  - action: present iSCSI LUNs over two paths
+    rollback: unpresent LUNs and remove iSCSI sessions

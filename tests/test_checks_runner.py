@@ -233,3 +233,20 @@ def test_judge_cli_missing_binary_fails_closed(rubric, monkeypatch):
     result = runner.run_rubric(rubric, _load("design_green.yaml"))
     assert "avl-05" in result["failing_checks"]
     assert "judge output invalid" in result["summary"]
+
+
+def test_ci_report_propagates_rubric_gaps_into_summary(tmp_path, monkeypatch):
+    """The maker's feedback must say WHY a criterion failed, not just its id."""
+    monkeypatch.chdir(tmp_path)
+    pdca = tmp_path / ".pdca"
+    pdca.mkdir()
+    (pdca / "ruff_exit.txt").write_text("0")
+    (pdca / "pytest_exit.txt").write_text("0")
+    (pdca / "rubric_result.json").write_text(json.dumps({
+        "outcome": "fail",
+        "failing_checks": ["net-01"],
+        "error_kinds": ["rubric:A"],
+        "summary": "rubric d v1: 1 criteria red | gaps: net-01: vlans are not distinct",
+    }))
+    result = ci_report.build()
+    assert "gaps: net-01: vlans are not distinct" in result["summary"]

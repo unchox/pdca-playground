@@ -37,6 +37,10 @@ CI_RESULT_PATH = Path(os.environ.get("PDCA_CI_RESULT", ".pdca/ci_result.json"))
 JUDGE_RESULT_PATH = Path(os.environ.get("PDCA_JUDGE_RESULT", ".pdca/judge_result.json"))
 READY_PATH = Path(os.environ.get("PDCA_READY", ".pdca/ready.json"))
 RUN_META_PATH = Path(os.environ.get("PDCA_RUN_META", ".pdca/run_meta.json"))
+# Written (and committed) when the maker deliberately made no edit; consumed by
+# the NEXT cycle's act run, which records it as a replan request (the maker
+# judged the contract unsatisfiable — a human must revise the plan).
+NOOP_MARKER_PATH = Path(os.environ.get("PDCA_MAKER_NOOP", ".pdca/maker_noop.json"))
 
 # Maker (Claude Code headless) configuration -- all overridable via env.
 # 明示 version 指定: production runtime での silent 変更防止 (2026-07-01 uchino 方針)
@@ -238,6 +242,12 @@ def _write_run_meta(ready: dict) -> None:
     RUN_META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _one_line(text: str, limit: int = 300) -> str:
+    """Collapse to a single line (GITHUB_OUTPUT is line-oriented) and truncate."""
+    flat = " ".join(str(text).split())
+    return flat[:limit] + ("..." if len(flat) > limit else "")
+
+
 def _run_maker_uncached(feedback: dict) -> dict:
     """Original maker path — invoke the CLI, record telemetry, demand a change."""
     result = run_claude_maker(build_maker_prompt(feedback))
@@ -245,6 +255,10 @@ def _run_maker_uncached(feedback: dict) -> dict:
         "session_id": result.get("session_id"),
         "total_cost_usd": result.get("total_cost_usd"),
         "num_turns": result.get("num_turns"),
+        # The maker's own words — e.g. its diagnosis when it refuses to edit
+        # because the contract looks unsatisfiable. Without this the human
+        # only ever sees WHICH checks failed, never the maker's reasoning.
+        "result_text": str(result.get("result", ""))[:4000],
     }
     Path(".pdca/maker_last.json").write_text(json.dumps(telemetry, ensure_ascii=False, indent=2), encoding="utf-8")
     if not working_tree_dirty():
@@ -288,6 +302,22 @@ def call_maker(feedback: dict) -> dict:
     telemetry = _run_maker_uncached(feedback)
     after = _porcelain_snapshot()
     files = _snapshot_delta(before, after)
+    if files == {}:
+        # The maker deliberately made no edit — per its prompt that means it
+        # judged the contract unfixable. Persist a marker (committed by the
+        # continue step) so the NEXT cycle records replan_requested and the
+        # guard routes to the human plan gate instead of burning cycles.
+        NOOP_MARKER_PATH.write_text(
+            json.dumps(
+                {
+                    "cycle": feedback.get("cycle"),
+                    "diagnosis": telemetry.get("result_text", "")[:1000],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     if files:  # None (uncacheable) or {} (nothing attributable) both skip the put
         cache.put(
             "decisions",
@@ -320,6 +350,18 @@ def emit(decision: g.Decision, reason: str) -> None:
     print(line, end="")
 
 
+def _consume_maker_noop() -> dict | None:
+    """Read + delete the previous cycle's no-edit marker (None if absent)."""
+    if not NOOP_MARKER_PATH.exists():
+        return None
+    try:
+        marker = json.loads(NOOP_MARKER_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        marker = {}
+    NOOP_MARKER_PATH.unlink(missing_ok=True)
+    return marker if isinstance(marker, dict) else {}
+
+
 def main() -> int:
     ci = read_ci_result()
     judge = read_judge_result()
@@ -329,18 +371,28 @@ def main() -> int:
     if ci.get("outcome") != "pass":
         sig = g.compute_failure_signature(ci.get("failing_checks", []), ci.get("error_kinds"))
 
+    # A no-edit marker from the previous maker run means "the contract cannot
+    # be satisfied by editing" — treat it as a replan request (unless the
+    # gates somehow went green, in which case COMPLETED wins in the guard).
+    noop = _consume_maker_noop()
+    replan_requested = judge["replan_requested"] or (
+        noop is not None and ci.get("outcome") != "pass"
+    )
+
     g.record_outcome(
         state,
         ci.get("outcome", "fail"),
         sig,
         ci.get("summary", ""),
         quality_vector=judge["quality_vector"],
-        replan_requested=judge["replan_requested"],
+        replan_requested=replan_requested,
     )
 
     decision, reason = g.evaluate(state)
     g.apply_decision(state, decision)
     state.save(STATE_PATH)
+    if decision is g.Decision.REPLAN and noop and noop.get("diagnosis"):
+        reason = f"{reason} | maker diagnosis: {_one_line(noop['diagnosis'])}"
     emit(decision, reason)
 
     if decision is g.Decision.CONTINUE:

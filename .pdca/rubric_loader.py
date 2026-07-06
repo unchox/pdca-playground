@@ -32,8 +32,13 @@ def _load_schema() -> dict:
         raise RubricError(f"rubric schema unreadable at {SCHEMA_PATH}: {exc}") from exc
 
 
-def load_rubric(path: str | Path, checks_dir: str | Path = "checks") -> dict:
-    """Load + validate a rubric YAML. Returns the rubric dict or raises RubricError."""
+def load_rubric(path: str | Path, checks_dir: str | Path | None = "checks") -> dict:
+    """Load + validate a rubric YAML. Returns the rubric dict or raises RubricError.
+
+    checks_dir=None skips check-script existence verification — the admit gate
+    only needs (domain, version) identity; script existence is the Check
+    stage's (runner's) concern.
+    """
     path = Path(path)
     try:
         raw = path.read_text(encoding="utf-8")
@@ -58,6 +63,9 @@ def load_rubric(path: str | Path, checks_dir: str | Path = "checks") -> dict:
         if cid in seen:
             raise RubricError(f"duplicate criterion id '{cid}' in {path}")
         seen.add(cid)
+
+    if checks_dir is None:
+        return rubric
 
     checks_dir = Path(checks_dir)
     for crit in rubric["criteria"]:

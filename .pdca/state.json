@@ -1,8 +1,8 @@
 {
   "version": 2,
   "task_id": "T-CONFLICT-E2E3",
-  "status": "running",
-  "cycle": 2,
+  "status": "stopped_oscillation",
+  "cycle": 3,
   "max_cycles": 5,
   "oscillation_threshold": 3,
   "oscillation_window": 5,
@@ -26,6 +26,15 @@
       "quality_vector": null,
       "replan_requested": false,
       "ts": "2026-07-06T16:22:25.490878+00:00"
+    },
+    {
+      "cycle": 3,
+      "outcome": "fail",
+      "failure_signature": "58c7fa3b4160265e",
+      "summary": "1 gate group(s) red",
+      "quality_vector": null,
+      "replan_requested": false,
+      "ts": "2026-07-06T16:24:05.701414+00:00"
     }
   ]
 }

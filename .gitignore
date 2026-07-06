@@ -14,3 +14,9 @@ __pycache__/
 
 # secrets (Mac local 専用・3 層管理ルール・GitHub に絶対 commit しない)
 secrets/*.env
+
+# Phase 2 runtime artifacts (generated in the ci.yml job, never committed)
+.pdca/rubric_result.json
+.pdca/admit_rejected.txt
+.pdca/ruff_exit.txt
+.pdca/pytest_exit.txt

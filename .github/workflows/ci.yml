@@ -78,6 +78,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" 2>/dev/null || pip install pytest pytest-json-report ruff
 
+      # Rubric gates (Phase 2, L3) — class A checks + class B judge, driven by
+      # the committed ready.json. Writes .pdca/rubric_result.json; ci_report.py
+      # merges it (single writer of ci_result.json). The LLM credential is
+      # scoped to THIS STEP ONLY (2026-07-06 uchino approved; ci.yml executes
+      # maker-authored code, so use a spend-capped dedicated key). Absent
+      # credential = class B fails closed inside the runner, never a skip.
+      - name: Rubric gates
+        if: startsWith(github.ref_name, 'pdca/')
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          if [ -f .pdca/ready.json ]; then
+            DOMAIN=$(python -c "import json; print(json.load(open('.pdca/ready.json'))['rubric_domain'])")
+            TARGET=$(python -c "import json; print(json.load(open('.pdca/ready.json'))['artifact_target'])")
+            python checks/runner.py --rubric "rubric/${DOMAIN}.yaml" --artifact "$TARGET"
+            echo "rubric runner exit=$?"
+          else
+            echo "no ready.json — rubric gates skipped (pre-Phase-2 branch)"
+          fi
+
       # Run each gate; collect the ids of whatever is red into FAILING.
       # ci_report.py turns that into a STABLE failure signature input
       # (sorted check ids), never a hash of raw logs.

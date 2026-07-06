@@ -9,8 +9,62 @@ permissions:
   contents: read
 
 jobs:
+  # Admit gate (Phase 2, L2) — input-floor enforcement BEFORE any check runs.
+  # Fail-closed: on pdca/** branches a missing/invalid intake REJECTS the run
+  # and opens a human-gated issue with GITHUB_TOKEN (never PDCA_PAT — INV-2).
+  # Non-pdca refs (workflow_dispatch on main etc.) skip the gate entirely.
+  admit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        if: startsWith(github.ref_name, 'pdca/')
+
+      - uses: actions/setup-python@v5
+        if: startsWith(github.ref_name, 'pdca/')
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        if: startsWith(github.ref_name, 'pdca/')
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Admit gate (input floor)
+        if: startsWith(github.ref_name, 'pdca/')
+        id: admit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if python .pdca/admit.py --intake .pdca/intake.json --out .pdca/ready.json; then
+            echo "admit: PASS"
+          else
+            TITLE="PDCA admit REJECTED on ${GITHUB_REF_NAME}"
+            # title-dedup: one open issue per branch, no spam on repeated pushes
+            if [ -z "$(gh issue list --state open --search "in:title \"$TITLE\"" \
+                --json number --jq '.[].number')" ]; then
+              gh issue create --title "$TITLE" --body-file .pdca/admit_rejected.txt \
+                --label pdca-admit || \
+                gh issue create --title "$TITLE" --body-file .pdca/admit_rejected.txt
+            fi
+            exit 1
+          fi
+
+      - name: Upload ready
+        if: startsWith(github.ref_name, 'pdca/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ready
+          path: .pdca/ready.json
+          retention-days: 7
+
   check:
     runs-on: ubuntu-latest
+    needs: admit   # job id `check` unchanged — branch protection context intact
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

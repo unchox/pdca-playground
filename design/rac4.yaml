@@ -1,0 +1,29 @@
+# conflict-e2e3 seed: rubric-green on storage (paths: 2) but the cost-policy
+# test demands paths == 1. The two requirements are mutually exclusive.
+networks:
+  - role: interconnect
+    vlan: 401
+    subnet: 10.0.41.0/24
+  - role: public
+    vlan: 400
+    subnet: 10.0.40.0/24
+storage:
+  paths: 2
+  mpio:
+    policy: round-robin
+sections:
+  quorum:
+    voting_disk: dedicated iSCSI quorum LUN on a target separate from data LUNs
+    failure_behavior: >
+      node loss: the surviving node retains the quorum LUN reservation and
+      keeps the database open while the lost node is fenced;
+      interconnect partition: both nodes race for the SCSI-3 persistent
+      reservation on the voting disk, the winner continues and the loser
+      self-fences to prevent split-brain;
+      shared storage loss: neither node can renew the reservation, automatic
+      failover is suspended and operators are alerted until storage returns.
+steps:
+  - action: create the 2-node cluster
+    rollback: destroy the cluster and remove cluster metadata
+  - action: present iSCSI LUNs
+    rollback: unpresent LUNs and remove iSCSI sessions

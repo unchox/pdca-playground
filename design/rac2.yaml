@@ -1,5 +1,3 @@
-# e2e2 seed: every class-A criterion passes, but the quorum failure_behavior
-# only covers node loss — the class-B judge (avl-05) must drive the loop.
 networks:
   - role: interconnect
     vlan: 201
@@ -14,7 +12,19 @@ storage:
 sections:
   quorum:
     voting_disk: dedicated iSCSI quorum LUN
-    failure_behavior: if a node is lost, the surviving node keeps the database open
+    failure_behavior: |
+      Single node loss (fs-node-loss): the surviving node retains the quorum
+      LUN reservation and keeps the clustered database open; the lost node is
+      fenced until it rejoins and resynchronizes.
+      Interconnect network partition (fs-net-partition): both nodes race to
+      reserve the voting disk; the node that wins the SCSI-3 persistent
+      reservation keeps the database online while the losing node self-fences
+      (stops the database) to prevent split-brain.
+      Shared iSCSI storage loss (fs-storage-loss): if the quorum LUN itself
+      becomes unreachable, neither node can win a fresh reservation, so both
+      nodes suspend automatic failover and the currently active node keeps
+      serving without releasing its existing reservation; the condition is
+      alerted to operators until the storage path is restored.
 steps:
   - action: create the 2-node cluster
     rollback: destroy the cluster and remove cluster metadata

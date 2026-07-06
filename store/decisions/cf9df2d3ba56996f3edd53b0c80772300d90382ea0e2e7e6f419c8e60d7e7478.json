@@ -1,0 +1,38 @@
+{
+  "key_material": {
+    "input_hash": "817758af19cd7911a2f7f30f6bbf228a6d31283b657b0cc799fcda6ff040eac2",
+    "feedback": {
+      "cycle": 1,
+      "still_failing": [
+        "tests/test_vlan_util.py::test_parse_lowercase_prefix",
+        "tests/test_vlan_util.py::test_parse_uppercase_prefix",
+        "tests/test_vlan_util.py::test_parse_plain_number",
+        "tests/test_vlan_util.py::test_invalid_text_raises",
+        "tests/test_vlan_util.py::test_out_of_range_raises",
+        "avl-05"
+      ],
+      "error_kinds": [
+        "tests",
+        "rubric:B"
+      ],
+      "summary": "2 gate group(s) red",
+      "prior_signatures": [
+        "11179573982ee8c1"
+      ]
+    },
+    "model_id": "claude-sonnet-5",
+    "prompt_version": "1",
+    "rubric_domain": "rac-hyperv-design",
+    "rubric_version": 1
+  },
+  "telemetry": {
+    "session_id": "c09b1b6a-1e94-4e40-ab7e-e1a3a06b39c7",
+    "total_cost_usd": 0.5628966000000001,
+    "num_turns": 22
+  },
+  "files": {
+    "design/rac2.yaml": "networks:\n  - role: interconnect\n    vlan: 201\n    subnet: 10.0.201.0/24\n  - role: public\n    vlan: 200\n    subnet: 10.0.200.0/24\nstorage:\n  paths: 2\n  mpio:\n    policy: round-robin\nsections:\n  quorum:\n    voting_disk: dedicated iSCSI quorum LUN\n    failure_behavior: |\n      Single node loss (fs-node-loss): the surviving node retains the quorum\n      LUN reservation and keeps the clustered database open; the lost node is\n      fenced until it rejoins and resynchronizes.\n      Interconnect network partition (fs-net-partition): both nodes race to\n      reserve the voting disk; the node that wins the SCSI-3 persistent\n      reservation keeps the database online while the losing node self-fences\n      (stops the database) to prevent split-brain.\n      Shared iSCSI storage loss (fs-storage-loss): if the quorum LUN itself\n      becomes unreachable, neither node can win a fresh reservation, so both\n      nodes suspend automatic failover and the currently active node keeps\n      serving without releasing its existing reservation; the condition is\n      alerted to operators until the storage path is restored.\nsteps:\n  - action: create the 2-node cluster\n    rollback: destroy the cluster and remove cluster metadata\n  - action: present iSCSI LUNs over two paths\n    rollback: unpresent LUNs and remove iSCSI sessions\n",
+    "src/vlan_util.py": "\"\"\"VLAN id parsing helper.\"\"\"\n\nfrom __future__ import annotations\n\nimport re\n\n_VLAN_RE = re.compile(r\"^(?:vlan)?(\\d+)$\", re.IGNORECASE)\n_MIN_VLAN_ID = 1\n_MAX_VLAN_ID = 4094\n\n\ndef parse_vlan(text: str) -> int:\n    \"\"\"Parse a VLAN id from text like \"vlan101\", \"VLAN200\", or \"300\".\n\n    Raises ValueError if the text isn't a recognized VLAN identifier or the\n    numeric id falls outside the valid range (1..4094).\n    \"\"\"\n    match = _VLAN_RE.match(text)\n    if not match:\n        raise ValueError(f\"not a valid VLAN identifier: {text!r}\")\n    vlan_id = int(match.group(1))\n    if not (_MIN_VLAN_ID <= vlan_id <= _MAX_VLAN_ID):\n        raise ValueError(\n            f\"VLAN id out of range (1..{_MAX_VLAN_ID}): {vlan_id}\"\n        )\n    return vlan_id\n"
+  },
+  "created_ts": "2026-07-06T16:10:21.805545+00:00"
+}

@@ -1,0 +1,8 @@
+{
+  "model_id": "claude-sonnet-5",
+  "prompt_version": "1",
+  "judge_prompt_version": "1",
+  "rubric_domain": "rac-hyperv-design",
+  "rubric_version": 1,
+  "input_hash": "2b0748698fbea64051f07841eba1604894fc2aa5ed1792b4780e7d5f47e54c67"
+}

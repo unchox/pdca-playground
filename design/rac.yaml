@@ -1,15 +1,25 @@
-# Seed artifact for the Phase 2 e2e run — deliberately defective:
-# net-01 (vlans not distinct), sto-02 (single path, no mpio.policy),
-# avl-03 (no quorum section), ops-04 (step without rollback),
-# avl-05 (no failure-scenario coverage for the judge to accept).
+# RAC-on-Hyper-V design: separated networks, multipathed iSCSI storage,
+# documented quorum behavior, and rollback for every change step.
 networks:
   - role: interconnect
-    vlan: 100
+    vlan: 101
+    subnet: 10.0.101.0/24
   - role: public
     vlan: 100
+    subnet: 10.0.100.0/24
 storage:
-  paths: 1
+  paths: 2
+  mpio:
+    policy: round-robin
+sections:
+  quorum:
+    voting_disk: dedicated iSCSI quorum LUN on a target separate from data LUNs
+    failure_behavior: >
+      node loss: surviving node holds quorum and keeps the DB open;
+      interconnect partition: node owning the voting disk survives, peer fences;
+      storage loss: both nodes lose quorum and shut down cleanly.
 steps:
   - action: create the 2-node cluster
     rollback: destroy the cluster and remove cluster metadata
   - action: present iSCSI LUN to both nodes
+    rollback: unpresent the iSCSI LUN from both nodes and remove the storage mapping

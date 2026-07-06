@@ -2,11 +2,21 @@
   "version": 2,
   "task_id": "T-RAC-E2E",
   "status": "running",
-  "cycle": 0,
+  "cycle": 1,
   "max_cycles": 5,
   "oscillation_threshold": 3,
   "oscillation_window": 5,
   "no_progress_threshold": 2,
   "min_quality_delta": 0.01,
-  "history": []
+  "history": [
+    {
+      "cycle": 1,
+      "outcome": "fail",
+      "failure_signature": "f346974f85118f04",
+      "summary": "2 gate group(s) red",
+      "quality_vector": null,
+      "replan_requested": false,
+      "ts": "2026-07-06T15:48:53.050551+00:00"
+    }
+  ]
 }

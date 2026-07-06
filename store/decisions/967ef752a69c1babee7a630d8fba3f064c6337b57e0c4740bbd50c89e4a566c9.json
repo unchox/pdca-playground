@@ -1,0 +1,36 @@
+{
+  "key_material": {
+    "input_hash": "2b0748698fbea64051f07841eba1604894fc2aa5ed1792b4780e7d5f47e54c67",
+    "feedback": {
+      "cycle": 1,
+      "still_failing": [
+        "net-01",
+        "sto-02",
+        "avl-03",
+        "ops-04",
+        "avl-05"
+      ],
+      "error_kinds": [
+        "rubric:A",
+        "rubric:B"
+      ],
+      "summary": "2 gate group(s) red",
+      "prior_signatures": [
+        "f346974f85118f04"
+      ]
+    },
+    "model_id": "claude-sonnet-5",
+    "prompt_version": "1",
+    "rubric_domain": "rac-hyperv-design",
+    "rubric_version": 1
+  },
+  "telemetry": {
+    "session_id": "4d7a84d4-1d14-4cb4-94c6-431eba7c678a",
+    "total_cost_usd": 0.632417,
+    "num_turns": 31
+  },
+  "files": {
+    "design/rac.yaml": "# RAC-on-Hyper-V design: separated networks, multipathed iSCSI storage,\n# documented quorum behavior, and rollback for every change step.\nnetworks:\n  - role: interconnect\n    vlan: 101\n    subnet: 10.0.101.0/24\n  - role: public\n    vlan: 100\n    subnet: 10.0.100.0/24\nstorage:\n  paths: 2\n  mpio:\n    policy: round-robin\nsections:\n  quorum:\n    voting_disk: dedicated iSCSI quorum LUN on a target separate from data LUNs\n    failure_behavior: >\n      node loss: surviving node holds quorum and keeps the DB open;\n      interconnect partition: node owning the voting disk survives, peer fences;\n      storage loss: both nodes lose quorum and shut down cleanly.\nsteps:\n  - action: create the 2-node cluster\n    rollback: destroy the cluster and remove cluster metadata\n  - action: present iSCSI LUN to both nodes\n    rollback: unpresent the iSCSI LUN from both nodes and remove the storage mapping\n"
+  },
+  "created_ts": "2026-07-06T15:50:43.212216+00:00"
+}

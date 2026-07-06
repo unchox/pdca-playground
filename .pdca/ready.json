@@ -1,0 +1,13 @@
+{
+  "task_id": "T-RAC-E2E",
+  "domain": "rac-hyperv-design",
+  "goal": "Fix design/rac.yaml so that every criterion in rubric/rac-hyperv-design.yaml passes: separate interconnect/public networks with distinct vlans, multipath iSCSI with a stated MPIO policy, a quorum section covering voting disk and failure behavior for all reference failure scenarios, and a rollback for every change step.",
+  "constraints": [
+    "edit only design/rac.yaml",
+    "do not modify rubric files, tests, or workflow files"
+  ],
+  "artifact_target": "design/rac.yaml",
+  "rubric_domain": "rac-hyperv-design",
+  "rubric_version": 1,
+  "enrichment_log": []
+}

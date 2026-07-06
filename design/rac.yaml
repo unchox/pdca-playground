@@ -1,0 +1,15 @@
+# Seed artifact for the Phase 2 e2e run — deliberately defective:
+# net-01 (vlans not distinct), sto-02 (single path, no mpio.policy),
+# avl-03 (no quorum section), ops-04 (step without rollback),
+# avl-05 (no failure-scenario coverage for the judge to accept).
+networks:
+  - role: interconnect
+    vlan: 100
+  - role: public
+    vlan: 100
+storage:
+  paths: 1
+steps:
+  - action: create the 2-node cluster
+    rollback: destroy the cluster and remove cluster metadata
+  - action: present iSCSI LUN to both nodes

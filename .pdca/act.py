@@ -19,24 +19,35 @@ Division of labour
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cache  # noqa: E402
 import guard as g  # noqa: E402
+from canonical import canonical_hash  # noqa: E402
 
 STATE_PATH = Path(os.environ.get("PDCA_STATE", ".pdca/state.json"))
 CI_RESULT_PATH = Path(os.environ.get("PDCA_CI_RESULT", ".pdca/ci_result.json"))
 JUDGE_RESULT_PATH = Path(os.environ.get("PDCA_JUDGE_RESULT", ".pdca/judge_result.json"))
+READY_PATH = Path(os.environ.get("PDCA_READY", ".pdca/ready.json"))
+RUN_META_PATH = Path(os.environ.get("PDCA_RUN_META", ".pdca/run_meta.json"))
 
 # Maker (Claude Code headless) configuration -- all overridable via env.
 # 明示 version 指定: production runtime での silent 変更防止 (2026-07-01 uchino 方針)
 # alias `sonnet` を避け、 Claude Code CLI update 時の自動追従を防ぐ (reproducibility 確保)
 # 移行時: 新 model release → CLAUDE.md 反映 + このデフォルト値更新 (git diff で変更追跡)
 MAKER_MODEL = os.environ.get("PDCA_MAKER_MODEL", "claude-sonnet-5")
+# Part of the decision-cache key: bump whenever build_maker_prompt's wording changes.
+MAKER_PROMPT_VERSION = "1"
+# Keep in sync with JUDGE_PROMPT_VERSION in checks/runner.py (act.py cannot
+# import the runner — it needs PyYAML, which the act workflow never installs).
+JUDGE_PROMPT_VERSION = os.environ.get("PDCA_JUDGE_PROMPT_VERSION", "1")
 MAKER_MAX_TURNS = int(os.environ.get("PDCA_MAKER_MAX_TURNS", "30"))
 MAKER_ALLOWED_TOOLS = os.environ.get("PDCA_MAKER_ALLOWED_TOOLS", "Edit,Write,Read,Grep,Glob")
 MAKER_CLI = os.environ.get("PDCA_MAKER_CLI", "claude")
@@ -133,13 +144,95 @@ def working_tree_dirty() -> bool:
     return bool(out.stdout.strip())
 
 
-def call_maker(feedback: dict) -> dict:
-    """Edit files to satisfy the failing checks. Edits only -- no git ops here.
+# -------------------------------------------------- decision cache (Phase 2, L4)
+def _read_ready() -> dict | None:
+    """ready.json (written by the admit gate, committed on the branch).
+    Absent = pre-Phase-2 task: the cache layer bypasses entirely."""
+    if not READY_PATH.exists():
+        return None
+    return json.loads(READY_PATH.read_text(encoding="utf-8"))
 
-    Raises if the maker produced no change, so a stuck maker fails loudly rather
-    than silently spinning the loop.
-    """
-    Path(".pdca/last_feedback.json").write_text(json.dumps(feedback, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _maker_cache_key(ready: dict, feedback: dict) -> str:
+    """Spec §6.2 key + canonical(feedback) (2026-07-06 uchino-approved deviation:
+    the spec key is cycle-invariant, so cycle >= 2 would always replay cycle 1's
+    patch and livelock; feedback carries cycle/still_failing/prior_signatures)."""
+    return canonical_hash(
+        {
+            "input_hash": canonical_hash(ready),
+            "feedback": feedback,
+            "model_id": MAKER_MODEL,
+            "prompt_version": MAKER_PROMPT_VERSION,
+            "rubric_domain": ready.get("rubric_domain"),
+            "rubric_version": ready.get("rubric_version"),
+        }
+    )
+
+
+def _porcelain_snapshot() -> dict[str, str | None]:
+    """{path: content sha256 | None if gone} for every tracked/untracked
+    (non-ignored) path git reports as changed."""
+    out = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=str(REPO_ROOT), capture_output=True, text=True
+    )
+    snap: dict[str, str | None] = {}
+    for line in out.stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip()
+        if " -> " in path:  # rename: capture the destination
+            path = path.split(" -> ")[-1]
+        path = path.strip('"')
+        f = REPO_ROOT / path
+        snap[path] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
+    return snap
+
+
+def _snapshot_delta(before: dict, after: dict) -> dict[str, str | None] | None:
+    """{path: full content | None(deleted)} for what the maker changed.
+    Returns None (= do not cache) if any changed file is not utf-8 text —
+    a partial record would replay a partial patch, which is worse than a miss."""
+    files: dict[str, str | None] = {}
+    for path, digest in after.items():
+        if path in before and before[path] == digest:
+            continue
+        if digest is None:
+            files[path] = None
+            continue
+        try:
+            files[path] = (REPO_ROOT / path).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            return None
+    return files
+
+
+def _replay_files(files: dict[str, str | None]) -> None:
+    for path, content in files.items():
+        f = REPO_ROOT / path
+        if content is None:
+            f.unlink(missing_ok=True)
+        else:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content, encoding="utf-8")
+
+
+def _write_run_meta(ready: dict) -> None:
+    """Sidecar for spec §6.4's keys — state.json cannot take them (guard.py's
+    loader TypeErrors on unknown keys and is INV-1-protected). Not gitignored:
+    the continue step's `git add -A` turns it into a free audit trail."""
+    meta = {
+        "model_id": MAKER_MODEL,
+        "prompt_version": MAKER_PROMPT_VERSION,
+        "judge_prompt_version": JUDGE_PROMPT_VERSION,
+        "rubric_domain": ready.get("rubric_domain"),
+        "rubric_version": ready.get("rubric_version"),
+        "input_hash": canonical_hash(ready),
+    }
+    RUN_META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _run_maker_uncached(feedback: dict) -> dict:
+    """Original maker path — invoke the CLI, record telemetry, demand a change."""
     result = run_claude_maker(build_maker_prompt(feedback))
     telemetry = {
         "session_id": result.get("session_id"),
@@ -149,6 +242,64 @@ def call_maker(feedback: dict) -> dict:
     Path(".pdca/maker_last.json").write_text(json.dumps(telemetry, ensure_ascii=False, indent=2), encoding="utf-8")
     if not working_tree_dirty():
         raise RuntimeError("maker produced no file changes; halting to avoid an empty cycle")
+    return telemetry
+
+
+def call_maker(feedback: dict) -> dict:
+    """Edit files to satisfy the failing checks. Edits only -- no git ops here.
+
+    Raises if the maker produced no change, so a stuck maker fails loudly rather
+    than silently spinning the loop.
+
+    Entry-point decision cache (spec §6.2): with a ready.json present, a cache
+    hit replays the stored patch without calling the LLM; a miss runs the maker
+    and stores {files, telemetry}. Without ready.json the original path runs
+    untouched. CacheCorruption propagates — fail-closed, never recompute over
+    a broken audit record.
+    """
+    Path(".pdca/last_feedback.json").write_text(json.dumps(feedback, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    ready = _read_ready()
+    if ready is None:
+        return _run_maker_uncached(feedback)
+
+    key = _maker_cache_key(ready, feedback)
+    record = cache.get("decisions", key)
+    if record is not None:
+        _replay_files(record.get("files", {}))
+        telemetry = dict(record.get("telemetry") or {})
+        telemetry["replayed"] = True
+        Path(".pdca/maker_last.json").write_text(
+            json.dumps(telemetry, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        _write_run_meta(ready)
+        if not working_tree_dirty():
+            raise RuntimeError("maker produced no file changes; halting to avoid an empty cycle")
+        return telemetry
+
+    before = _porcelain_snapshot()
+    telemetry = _run_maker_uncached(feedback)
+    after = _porcelain_snapshot()
+    files = _snapshot_delta(before, after)
+    if files:  # None (uncacheable) or {} (nothing attributable) both skip the put
+        cache.put(
+            "decisions",
+            key,
+            {
+                "key_material": {
+                    "input_hash": canonical_hash(ready),
+                    "feedback": feedback,
+                    "model_id": MAKER_MODEL,
+                    "prompt_version": MAKER_PROMPT_VERSION,
+                    "rubric_domain": ready.get("rubric_domain"),
+                    "rubric_version": ready.get("rubric_version"),
+                },
+                "telemetry": telemetry,
+                "files": files,
+                "created_ts": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    _write_run_meta(ready)
     return telemetry
 
 

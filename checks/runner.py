@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / ".pdca"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import cache  # noqa: E402
 import rubric_loader as rl  # noqa: E402
 import rollback_coverage  # noqa: E402
 import section_present  # noqa: E402
@@ -243,7 +244,16 @@ def main(argv: list[str] | None = None) -> int:
         artifact = yaml.safe_load(artifact_path.read_text(encoding="utf-8"))
         if not isinstance(artifact, dict):
             raise RunnerError("artifact is not a mapping")
-        result = run_rubric(rubric, artifact, skip_judge=args.skip_judge)
+        # Verdict caching is mandatory in the real pipeline (spec §5.3/§6.3);
+        # the injectable seams stay for tests. CacheCorruption is deliberately
+        # NOT caught: a broken audit record must stop the run, not degrade it.
+        result = run_rubric(
+            rubric,
+            artifact,
+            skip_judge=args.skip_judge,
+            cache_get=cache.get,
+            cache_put=cache.put,
+        )
     except (rl.RubricError, RunnerError, yaml.YAMLError) as exc:
         result = _infra_result(str(exc))
 

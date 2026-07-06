@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision.schema.json",
+  "title": "Cached maker decision (store/decisions/<key>.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key_material", "telemetry", "files", "created_ts"],
+  "properties": {
+    "key_material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_hash", "feedback", "model_id", "prompt_version",
+                   "rubric_domain", "rubric_version"],
+      "properties": {
+        "input_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "feedback": { "type": "object" },
+        "model_id": { "type": "string", "minLength": 1 },
+        "prompt_version": { "type": "string", "minLength": 1 },
+        "rubric_domain": { "type": ["string", "null"] },
+        "rubric_version": { "type": ["integer", "null"] }
+      }
+    },
+    "telemetry": { "type": "object" },
+    "files": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "created_ts": { "type": "string", "format": "date-time" }
+  }
+}

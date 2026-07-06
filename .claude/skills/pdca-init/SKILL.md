@@ -52,6 +52,12 @@ tests/test_guard.py   # the guard guarded by its own deterministic oracle
 6. Explain the one required human checkpoint: **plan approval**. Run the
    `planner` subagent on the goal, have a human approve the emitted contract,
    commit it, then start the loop by pushing a `pdca/<task>` branch.
+7. (Phase 2 repos — those with `.pdca/admit.py`) Before the first push, create
+   `.pdca/intake.json` on the task branch with the input floor
+   (`task_id, domain, goal, constraints, artifact_target`), run
+   `python .pdca/admit.py --force` locally, and commit both `intake.json` and
+   the generated `ready.json`. The CI admit gate REJECTS (fail-closed) any
+   pdca/** push without a valid committed intake.
 
 ## Tuning knobs (in .pdca/state.json)
 

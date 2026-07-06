@@ -1,0 +1,25 @@
+# Minimal RAC-on-Hyper-V design that satisfies every class-A criterion
+# of rubric/rac-hyperv-design.yaml (and gives class B real quorum content).
+networks:
+  - role: interconnect
+    vlan: 101
+    subnet: 10.0.101.0/24
+  - role: public
+    vlan: 100
+    subnet: 10.0.100.0/24
+storage:
+  paths: 2
+  mpio:
+    policy: round-robin
+sections:
+  quorum:
+    voting_disk: dedicated iSCSI quorum LUN on a target separate from data LUNs
+    failure_behavior: >
+      node loss: surviving node holds quorum and keeps the DB open;
+      interconnect partition: node owning the voting disk survives, peer fences;
+      storage loss: both nodes lose quorum and shut down cleanly.
+steps:
+  - action: create the 2-node cluster
+    rollback: destroy the cluster and remove cluster metadata
+  - action: present iSCSI LUNs over two paths
+    rollback: unpresent LUNs and remove iSCSI sessions

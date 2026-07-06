@@ -1,0 +1,14 @@
+# Deliberately defective design: trips net-01 (vlan not distinct),
+# sto-02 (single path, no mpio.policy), avl-03 (no quorum section),
+# ops-04 (step 1 has no rollback).
+networks:
+  - role: interconnect
+    vlan: 100
+  - role: public
+    vlan: 100
+storage:
+  paths: 1
+steps:
+  - action: create the 2-node cluster
+    rollback: destroy the cluster
+  - action: present iSCSI LUN

@@ -19,6 +19,7 @@ PDCA_DIR = Path(".pdca")
 RUFF_EXIT = PDCA_DIR / "ruff_exit.txt"
 PYTEST_EXIT = PDCA_DIR / "pytest_exit.txt"
 PYTEST_JSON = PDCA_DIR / "pytest.json"
+RUBRIC_RESULT = PDCA_DIR / "rubric_result.json"
 
 
 def _read_exit(path: Path) -> int:
@@ -55,6 +56,18 @@ def build() -> dict:
 
     # Non-test gate groups (lint, type, ...) contribute their group id directly.
     failing += [g for g in failing_groups if g != "tests"]
+
+    # Rubric gates (Phase 2): checks/runner.py writes a partial result in the
+    # same 4-key shape; merging it here keeps ci_result.json single-writer.
+    # A corrupt partial is an infra failure, never a silent skip (fail-closed).
+    if RUBRIC_RESULT.exists():
+        try:
+            rub = json.loads(RUBRIC_RESULT.read_text(encoding="utf-8"))
+            failing += [c for c in rub.get("failing_checks", []) if c not in failing]
+            failing_groups += [k for k in rub.get("error_kinds", []) if k not in failing_groups]
+        except json.JSONDecodeError:
+            failing.append("__rubric_infra__")
+            failing_groups.append("infra")
 
     outcome = "fail" if failing_groups else "pass"
     return {

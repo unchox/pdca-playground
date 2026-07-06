@@ -127,7 +127,14 @@ def run_claude_maker(prompt: str) -> dict:
         "--allowedTools", MAKER_ALLOWED_TOOLS,
         "--output-format", "json",
     ]
-    proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True)
+    # Billing separation: the maker runs on the Max seat (CLAUDE_CODE_OAUTH_TOKEN,
+    # 2026-06-30 decision). ANTHROPIC_API_KEY is the judge's spend-capped key
+    # (2026-07-06) and would silently take over maker billing if both reach the
+    # CLI — drop it from the child env whenever the OAuth token is present.
+    env = os.environ.copy()
+    if env.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        env.pop("ANTHROPIC_API_KEY", None)
+    proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         raise RuntimeError(f"claude headless failed (exit {proc.returncode}): {proc.stderr[:2000]}")
     try:

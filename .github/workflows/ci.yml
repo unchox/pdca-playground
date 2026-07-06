@@ -78,6 +78,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" 2>/dev/null || pip install pytest pytest-json-report ruff
 
+      # The class-B judge runs `claude -p` headless from checks/runner.py —
+      # install the CLI here (mirrors pdca-act.yml; ubuntu-latest ships node
+      # for the npm fallback). Without it the judge fails closed per criterion.
+      - name: Install Claude Code (judge)
+        if: startsWith(github.ref_name, 'pdca/')
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash || npm install -g @anthropic-ai/claude-code
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       # Verdict cache (Phase 2, L4): judge verdicts are produced in THIS job,
       # which cannot commit (contents: read) — persist store/verdicts via
       # actions/cache instead. Decisions are produced in the act job and are

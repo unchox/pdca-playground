@@ -66,3 +66,25 @@ def test_read_judge_result_drops_malformed(monkeypatch, tmp_path):
     out = act.read_judge_result()
     assert out["quality_vector"] is None          # non-numeric dropped
     assert out["replan_requested"] is True         # coerced to bool
+
+
+def test_maker_env_drops_api_key_when_oauth_present(monkeypatch):
+    """Billing separation: the judge's ANTHROPIC_API_KEY must never reach the maker
+    CLI when the Max-seat OAuth token is configured."""
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-token")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "judge-key")
+    captured = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = '{"session_id": "s"}'
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env")
+        return FakeProc()
+
+    monkeypatch.setattr(act.subprocess, "run", fake_run)
+    act.run_claude_maker("prompt")
+    assert "ANTHROPIC_API_KEY" not in captured["env"]
+    assert captured["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "oauth-token"

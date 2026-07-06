@@ -124,7 +124,10 @@ def judge_criterion(criterion: dict, rubric: dict, artifact: dict) -> tuple[bool
     for _attempt in range(2):
         try:
             verdict = _parse_verdict(_invoke_judge_cli(prompt))
-        except (RuntimeError, ValueError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        except (RuntimeError, OSError, ValueError,
+                json.JSONDecodeError, jsonschema.ValidationError) as exc:
+            # OSError covers a missing/broken judge CLI binary — a criterion-level
+            # fail-closed, never a crash that would skip the whole rubric layer.
             last_error = str(exc)
             continue
         unaddressed = [i for i in verdict["items"] if not i["addressed"]]

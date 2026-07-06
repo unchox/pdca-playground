@@ -20,6 +20,7 @@ RUFF_EXIT = PDCA_DIR / "ruff_exit.txt"
 PYTEST_EXIT = PDCA_DIR / "pytest_exit.txt"
 PYTEST_JSON = PDCA_DIR / "pytest.json"
 RUBRIC_RESULT = PDCA_DIR / "rubric_result.json"
+READY = PDCA_DIR / "ready.json"
 
 
 def _read_exit(path: Path) -> int:
@@ -68,6 +69,12 @@ def build() -> dict:
         except json.JSONDecodeError:
             failing.append("__rubric_infra__")
             failing_groups.append("infra")
+    elif READY.exists():
+        # A committed ready.json means rubric gates were REQUIRED this run.
+        # No partial result = the runner crashed before writing — treating that
+        # as pass would silently drop the whole rubric layer (fail-closed).
+        failing.append("__rubric_infra__")
+        failing_groups.append("infra")
 
     outcome = "fail" if failing_groups else "pass"
     return {
